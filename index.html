@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>統計大師：決策樹尋寶遊戲</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+        }
+        .fade-in {
+            animation: fadeIn 0.4s ease-in-out forwards;
+        }
+        .slide-up {
+            animation: slideUp 0.5s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .option-btn {
+            transition: all 0.2s ease;
+        }
+        .option-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .option-btn:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 min-h-screen flex flex-col items-center justify-center p-4">
+
+    <!-- Game Container -->
+    <div class="max-w-2xl w-full bg-white rounded-3xl shadow-xl overflow-hidden slide-up">
+        
+        <!-- Header -->
+        <div class="bg-indigo-600 p-6 text-center relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCI+PGNpcmNsZSBjeD0iMTAiIGN5PSIxMCIgcj0iMiIgZmlsbD0iI2ZmZiIvPjwvc3ZnPg==')]"></div>
+            <h1 class="text-3xl font-bold text-white relative z-10"><i class="fa-solid fa-tree mr-2"></i> 統計大師決策樹</h1>
+            <p class="text-indigo-100 mt-2 relative z-10">幫你快速找出對應的統計方法！</p>
+        </div>
+
+        <!-- Progress / Breadcrumbs -->
+        <div id="breadcrumb-container" class="bg-indigo-50 p-3 px-6 text-sm text-indigo-700 font-medium hidden">
+            <i class="fa-solid fa-map-signs mr-2"></i> 你的選擇路徑：
+            <span id="breadcrumbs"></span>
+        </div>
+
+        <!-- Question Area -->
+        <div id="question-container" class="p-8 fade-in">
+            <h2 id="question-text" class="text-2xl font-bold text-gray-800 mb-6 text-center">
+                第一步：你現在想要比較什麼？
+            </h2>
+            
+            <div id="options-container" class="space-y-4 flex flex-col">
+                <!-- Options will be injected here by JS -->
+            </div>
+        </div>
+
+        <!-- Result Area (Hidden initially) -->
+        <div id="result-container" class="p-10 hidden flex-col items-center text-center fade-in">
+            <div class="w-24 h-24 bg-green-100 text-green-500 rounded-full flex items-center justify-center text-5xl mb-4">
+                <i class="fa-solid fa-check-circle"></i>
+            </div>
+            <h2 class="text-gray-500 text-lg mb-1">適合你的統計方法是：</h2>
+            <h1 id="result-title" class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 mb-4">
+                t 檢定
+            </h1>
+            <p id="result-desc" class="text-gray-600 text-lg bg-gray-50 p-4 rounded-xl border border-gray-100">
+                描述文字
+            </p>
+            
+            <!-- 新增的生活實例區塊 -->
+            <div class="mt-4 w-full text-left bg-blue-50 p-5 rounded-xl border border-blue-100 shadow-inner">
+                <div class="font-bold text-blue-800 mb-2 flex items-center">
+                    <i class="fa-solid fa-lightbulb text-yellow-500 mr-2 text-xl"></i> 
+                    <span>生活實例秒懂：</span>
+                </div>
+                <div id="result-example" class="text-blue-700 leading-relaxed">
+                    實例文字
+                </div>
+            </div>
+            
+            <button onclick="restartGame()" class="mt-8 px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-full shadow-lg transition-colors flex items-center gap-2">
+                <i class="fa-solid fa-rotate-right"></i> 再玩一次
+            </button>
+        </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-8 text-gray-400 text-sm text-center">
+        根據您的統計決策樹邏輯打造 <br>
+        <i class="fa-solid fa-code mt-1"></i> Interactive Game
+    </div>
+
+    <script>
+        // 遊戲資料結構：對應您的決策樹
+        const gameData = {
+            start: {
+                question: "第一步：你現在的資料，主要想要比較什麼？",
+                options: [
+                    { 
+                        text: "比「平均數」或連續分數", 
+                        subtext: "例如：身高、體重、考試分數",
+                        icon: "fa-chart-bar", 
+                        next: "mean_path",
+                        pathText: "比「平均數」"
+                    },
+                    { 
+                        text: "比「人數 / 比例 / 類別」", 
+                        subtext: "例如：性別、血型、星座",
+                        icon: "fa-chart-pie", 
+                        next: "chi_square",
+                        pathText: "比「人數/比例/類別」"
+                    }
+                ]
+            },
+            mean_path: {
+                question: "第二步：你的變數狀況是哪一種？",
+                options: [
+                    { 
+                        text: "單純比較組別", 
+                        subtext: "只有一個自變數與一個結果",
+                        icon: "fa-users", 
+                        next: "group_count",
+                        pathText: "單純比組別"
+                    },
+                    { 
+                        text: "有「兩個以上自變數」", 
+                        subtext: "想看主要效果＋交互作用",
+                        icon: "fa-project-diagram", 
+                        next: "factorial",
+                        pathText: "兩個以上自變數"
+                    },
+                    { 
+                        text: "要「控制」原本的差異", 
+                        subtext: "例如：扣除入學成績的影響",
+                        icon: "fa-sliders-h", 
+                        next: "ancova",
+                        pathText: "控制原本差異"
+                    },
+                    { 
+                        text: "有「兩個以上依變數」", 
+                        subtext: "多個結果同時看，避免誤差",
+                        icon: "fa-chart-line", 
+                        next: "manova",
+                        pathText: "兩個以上依變數"
+                    },
+                    { 
+                        text: "多個依變數 ＋ 控制變項", 
+                        subtext: "結合了控制變數與多個結果",
+                        icon: "fa-cogs", 
+                        next: "mancova",
+                        pathText: "多依變數＋控制"
+                    }
+                ]
+            },
+            group_count: {
+                question: "第三步：你要比較的平均數有「幾組」？",
+                options: [
+                    { 
+                        text: "剛好 2 組", 
+                        subtext: "例如：男生 vs 女生",
+                        icon: "fa-user-friends", 
+                        next: "t_test",
+                        pathText: "2組"
+                    },
+                    { 
+                        text: "3 組以上", 
+                        subtext: "例如：北、中、南三地",
+                        icon: "fa-users-between-lines", 
+                        next: "anova",
+                        pathText: "3組以上"
+                    }
+                ]
+            }
+        };
+
+        // 最終結果資料
+        const resultsData = {
+            chi_square: { 
+                title: "χ² 卡方檢定", 
+                desc: "專門用來分析「類別資料」，檢查不同類別的人數比例分配，或是兩件事情有沒有關聯性（獨立性檢定）。",
+                example: "想知道「血型（A、B、O、AB）」與「喜歡的飲料種類」是否有關聯。因為血型和飲料都只是分類，無法比大小數字。" 
+            },
+            factorial: { 
+                title: "Factorial ANOVA (析因變異數分析)", 
+                desc: "當你有「兩個以上的原因」時使用。不僅能看出各別的原因有沒有效（主要效果），還能觀察湊在一起會不會有加乘作用（交互作用）。",
+                example: "同時研究「運動頻率（高/低）」和「飲食習慣（健康/一般）」對體重的影響，除了看單一因素，還要看兩者加起來的超級加乘效果。" 
+            },
+            ancova: { 
+                title: "ANCOVA (共變數分析)", 
+                desc: "當實驗無法完全隨機分配時，用來「控制（排除）」雙方一開始就不公平的條件（初始差異），讓比較更客觀。",
+                example: "比較新教材對兩班級成績的影響，但把學生「入學時的原始成績」當作共變數扣除掉，確保兩班的起跑點公平。" 
+            },
+            manova: { 
+                title: "MANOVA (多變量統計)", 
+                desc: "當你想同時測量「兩個以上有關聯的結果（依變數）」時使用，一起算可以避免第一型錯誤率膨脹。",
+                example: "評估新的體育課菜單，「同時」對學生的「心肺耐力」與「肌肉強度」的影響。綁在一起算比分開算兩次更精確。" 
+            },
+            mancova: { 
+                title: "MANCOVA (多變量共變數分析)", 
+                desc: "最複雜的招式！同時具備了「多個依變數」需要一起測量，並且還要「控制」起始條件的差異。",
+                example: "評估新體育菜單對「心肺」與「肌力」的影響，同時還要扣除並排除學生「原本的運動習慣」造成的先天差異。" 
+            },
+            t_test: { 
+                title: "t 檢定", 
+                desc: "專門用來比較「兩組」資料的平均分數是否有顯著差異。包含獨立樣本、相依樣本等。",
+                example: "比較「男生」和「女生」兩組的平均身高是否有顯著的差別；或是比較同一批人「減肥前」跟「減肥後」的體重變化。" 
+            },
+            anova: { 
+                title: "ANOVA (單因子變異數分析)", 
+                desc: "當要比較的組別達到「三個或三個以上」時使用。如果有顯著差異，還需要搭配事後比較(Post hoc)找出哪兩組有差。",
+                example: "比較「北部」、「中部」、「南部」三個地區民眾的平均月薪是否有差異。如果有差，還要抓出到底是北部贏中部，還是中部贏南部。" 
+            }
+        };
+
+        let currentPath = [];
+
+        // 初始化遊戲
+        function initGame() {
+            currentPath = [];
+            document.getElementById('breadcrumb-container').classList.add('hidden');
+            document.getElementById('result-container').classList.add('hidden');
+            document.getElementById('question-container').classList.remove('hidden');
+            loadState('start');
+        }
+
+        // 載入特定的題目狀態
+        function loadState(stateKey) {
+            const container = document.getElementById('question-container');
+            // 觸發重新動畫
+            container.classList.remove('fade-in');
+            void container.offsetWidth; // trigger reflow
+            container.classList.add('fade-in');
+
+            const state = gameData[stateKey];
+            document.getElementById('question-text').innerText = state.question;
+            
+            const optionsContainer = document.getElementById('options-container');
+            optionsContainer.innerHTML = '';
+
+            state.options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = "option-btn w-full text-left bg-white border-2 border-indigo-100 hover:border-indigo-400 rounded-2xl p-5 flex items-center group";
+                btn.onclick = () => handleChoice(opt);
+                
+                btn.innerHTML = `
+                    <div class="w-12 h-12 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center text-xl mr-4 group-hover:bg-indigo-500 group-hover:text-white transition-colors flex-shrink-0">
+                        <i class="fa-solid ${opt.icon}"></i>
+                    </div>
+                    <div>
+                        <div class="font-bold text-gray-800 text-lg group-hover:text-indigo-700 transition-colors">${opt.text}</div>
+                        <div class="text-gray-500 text-sm mt-1">${opt.subtext}</div>
+                    </div>
+                    <div class="ml-auto text-gray-300 group-hover:text-indigo-400 transition-colors">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </div>
+                `;
+                optionsContainer.appendChild(btn);
+            });
+
+            updateBreadcrumbs();
+        }
+
+        // 處理玩家選擇
+        function handleChoice(option) {
+            currentPath.push(option.pathText);
+            
+            if (resultsData[option.next]) {
+                showResult(option.next);
+            } else {
+                loadState(option.next);
+            }
+        }
+
+        // 更新麵包屑(路徑紀錄)
+        function updateBreadcrumbs() {
+            const bcContainer = document.getElementById('breadcrumb-container');
+            const bcText = document.getElementById('breadcrumbs');
+            
+            if (currentPath.length > 0) {
+                bcContainer.classList.remove('hidden');
+                bcText.innerHTML = currentPath.join(' <i class="fa-solid fa-arrow-right mx-1 text-indigo-300 text-xs"></i> ');
+            } else {
+                bcContainer.classList.add('hidden');
+            }
+        }
+
+        // 顯示最終結果
+        function showResult(resultKey) {
+            updateBreadcrumbs();
+            
+            document.getElementById('question-container').classList.add('hidden');
+            
+            const resultContainer = document.getElementById('result-container');
+            resultContainer.classList.remove('hidden');
+            
+            // 重新觸發動畫
+            resultContainer.classList.remove('fade-in');
+            void resultContainer.offsetWidth;
+            resultContainer.classList.add('fade-in');
+
+            const result = resultsData[resultKey];
+            document.getElementById('result-title').innerText = result.title;
+            document.getElementById('result-desc').innerText = result.desc;
+            document.getElementById('result-example').innerText = result.example;
+
+            // 噴射彩帶特效
+            fireConfetti();
+        }
+
+        // 重新開始
+        function restartGame() {
+            initGame();
+        }
+
+        // 彩帶特效函數
+        function fireConfetti() {
+            var count = 200;
+            var defaults = {
+                origin: { y: 0.7 }
+            };
+
+            function fire(particleRatio, opts) {
+                confetti(Object.assign({}, defaults, opts, {
+                    particleCount: Math.floor(count * particleRatio)
+                }));
+            }
+
+            fire(0.25, { spread: 26, startVelocity: 55 });
+            fire(0.2, { spread: 60 });
+            fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
+            fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+            fire(0.1, { spread: 120, startVelocity: 45 });
+        }
+
+        // 啟動遊戲
+        window.onload = initGame;
+    </script>
+</body>
+</html>
